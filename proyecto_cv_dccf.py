@@ -21,14 +21,18 @@ import nltk
 nltk.download('stopwords')
 
 # Cargar el modelo de Hugging Face
-tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-model = AutoModel.from_pretrained('bert-base-uncased')
+@st.cache_resource  # Ideal para modelos como BERT
+def load_model():
+    tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+    model = AutoModel.from_pretrained('bert-base-uncased')
+    return tokenizer, model
+tokenizer, model = load_model()
 
 # Función para cargar el dataset desde Google Drive (URL pública)
-@st.cache  # Cachear para mejorar rendimiento
+@st.cache_data # Cachear para mejorar rendimiento
 def load_data():
     file_id = "1GBebYCdlKQCXrgwLxkMykR7RsXuKVwC1"  
-    url = f"https://drive.google.com/file/d/1GBebYCdlKQCXrgwLxkMykR7RsXuKVwC1/view?usp=sharing={file_id}"
+    url =  f"https://drive.google.com/uc?export=download&id={file_id}"
     return pd.read_csv(url)
 
 df = load_data()
@@ -61,7 +65,7 @@ def get_embeddings(text):
     return embeddings
 
 # Obtener embeddings para todos los currículums
-df['Embeddings'] = df['Processed_Resume'].apply(lambda x: get_embeddings(x))
+df['Embeddings'] = df['Processed_Resume'].apply(lambda x: get_embeddings(x).numpy())
 
 # Función para encontrar los currículums más similares
 def recommend_similar_resumes(user_cv_embedding, df):
