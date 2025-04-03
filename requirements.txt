@@ -4,3 +4,6 @@ numpy
 matplotlib 
 transformers
 torch
+nltk
+scikit-learn
+pdfminer.six
