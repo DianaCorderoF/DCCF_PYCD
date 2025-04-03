@@ -109,5 +109,6 @@ if uploaded_file is not None:
                 st.write(f"**Categoría:** {row['Category']}")
                 st.write(f"**Resumen del CV:** {row['Processed_Resume']}")
                 st.write("---")
+    
     except Exception as e:
-    st.error(f"Ocurrió un error al procesar el archivo: {e}")
+        st.error(f"Ocurrió un error al procesar el archivo: {e}")
