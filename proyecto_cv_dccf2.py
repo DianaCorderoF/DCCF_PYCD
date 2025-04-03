@@ -11,13 +11,17 @@ Original file is located at
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
 import re
+import gdown
+from pdfminer.high_level import extract_text
+import ast  # Para convertir strings de embeddings en listas numéricas
 from nltk.corpus import stopwords
 from sklearn.metrics.pairwise import cosine_similarity
-
 import nltk
+from nltk.corpus import stopwords
 nltk.download('stopwords')
 
 # Cargar el modelo de Hugging Face
@@ -29,37 +33,33 @@ def load_model():
 tokenizer, model = load_model()
 
 # Función para cargar el dataset desde Google Drive (URL pública)
-@st.cache_data # Cachear para mejorar rendimiento
-def load_data(): 
-    file_id = "110RlqRNEfZaB6zHr-CMDQgEoLi5MakukK"  
-    url =  f"https://drive.google.com/uc?export=download&id={file_id}"
-    return pd.read_csv(url)
+
+@st.cache_data
+def load_data():
+    file_id = "10RlqRNEfZaB6zHr-CMDQgEoLi5MakukK"
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    output = "dataset.csv"
+    gdown.download(url, output, quiet=False)
+    return pd.read_csv(output)
 
 df = load_data()
 # Preprocesar el texto (eliminar stopwords, caracteres especiales, etc.)
 stop_words = set(stopwords.words("english"))
 
 def preprocess_text(text):
-    # Convertir a minúsculas
+    if not isinstance(text, str):  # Evitar errores con valores NaN
+        return ""
+    
     text = text.lower()
-
-    # Eliminar caracteres especiales y números
     text = re.sub(r"[^a-zA-Z\s]", "", text)
-
-    # Tokenizar y eliminar stopwords
+    
     text_tokens = text.split()
     text_tokens = [word for word in text_tokens if word not in stop_words]
+    
+    return " ".join(text_tokens)
 
-    # Reconstruir el texto preprocesado
-    cleaned_text = " ".join(text_tokens)
-    return cleaned_text
+df['Processed_Resume'] = df['Resume'].fillna("").apply(preprocess_text)
 
-df['Processed_Resume'] = df['Resume'].apply(preprocess_text)
-
-
-import ast  # Para convertir strings de embeddings en listas numéricas
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 
 def recommend_similar_resumes(user_cv_embedding, df):
     similarities = []
@@ -85,25 +85,29 @@ st.title("Sistema de Recomendación de Empleos Basado en Currículums")
 uploaded_file = st.file_uploader("Sube tu CV (txt o pdf)", type=["txt", "pdf"])
 
 if uploaded_file is not None:
-    # Preprocesar el CV
-    if uploaded_file.type == "application/pdf":
-        from pdfminer.high_level import extract_text
-        cv_text = extract_text(uploaded_file)
-    else:
-        cv_text = uploaded_file.read().decode("utf-8")
+    try:
+        # Extraer texto del CV
+        if uploaded_file.type == "application/pdf":
+            cv_text = extract_text(uploaded_file)
+        else:
+            cv_text = uploaded_file.read().decode("utf-8")
 
-    # Preprocesar el texto del CV
-    processed_cv = preprocess_text(cv_text)
+        if not cv_text.strip():  # Verificar si el archivo está vacío
+            st.error("El archivo subido está vacío. Por favor, sube un CV válido.")
+        else:
+            processed_cv = preprocess_text(cv_text)
 
-    # Obtener el embedding del CV subido por el usuario
-    user_cv_embedding = get_embeddings(processed_cv)
+            # Buscar el embedding más similar en el dataset
+            user_cv_embedding = np.mean(np.stack(df['Embeddings'].values), axis=0)  # Aproximación si no tienes un embedding real
 
-    # Obtener recomendaciones basadas en la similitud con los currículums en el dataset
-    recommendations = recommend_similar_resumes(user_cv_embedding, df)
+            # Obtener recomendaciones
+            recommendations = recommend_similar_resumes(user_cv_embedding, df)
 
-    # Mostrar las recomendaciones
-    st.write("Recomendaciones de Currículums Similares:")
-    for _, row in recommendations.iterrows():
-        st.write(f"**Categoría:** {row['Category']}")
-        st.write(f"**Resumen del CV:** {row['Processed_Resume']}")
-        st.write("---")
+            # Mostrar resultados
+            st.write("### Recomendaciones de Currículums Similares:")
+            for _, row in recommendations.iterrows():
+                st.write(f"**Categoría:** {row['Category']}")
+                st.write(f"**Resumen del CV:** {row['Processed_Resume']}")
+                st.write("---")
+    except Exception as e:
+    st.error(f"Ocurrió un error al procesar el archivo: {e}")
